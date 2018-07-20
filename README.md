@@ -4,3 +4,7 @@ Correlate Camera and Lidar Data
 
 
 Please set up the environment yourself
+
+
+OpenCV
+Urg_Library

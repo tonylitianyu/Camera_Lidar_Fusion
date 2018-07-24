@@ -48,14 +48,14 @@ vector<int> stringToArray(string text){
 }
 
 
-vector<int> findLidarDataRangeOnCamera(string points){
+vector<int> findLidarDataRangeOnLiveCamera(vector<int> points){
     
-    vector<int> distancePoints = stringToArray(points);  //input point data vector;
+    vector<int> distancePoints = points;  //input point data vector;
     int numberOfPoint = 1080;
     for(int i = 0; i < numberOfPoint; i++){
         //cout << i<< "th " << distancePoints[i] << endl; //print data for each of 1080 point;
     }
-
+    
     
     //calculate useful data range from Lidar for the camera since they have different angle.
     
@@ -77,6 +77,9 @@ vector<int> findLidarDataRangeOnCamera(string points){
     
     
 }
+
+
+
 
 // image version
 void processData(vector<int> data, string imageName){
@@ -149,19 +152,22 @@ void processFrame(vector<int> data, Mat &frame){
     
     int pointCounter = 0;
     for(int i = y-20; i < y+20; i++){
+        cout << i<< endl;
         for(int j = 0; j < image.cols;){
+            
             long currIdx = data.size() - 1 - pointCounter;
             if(currIdx >= 0){
                 double distance = double(data[data.size() - 1 - pointCounter]);
                 
-                cout << currIdx << endl;
+                //cout << currIdx << endl;
                 
                 Vec3b &bgrPixel = image.at<Vec3b>(i, j);
                 if(distance < maximumDetectableDistance){
                     
                     bgrPixel[0] = 255;// * (distance/maximumDetectableDistance);
                     bgrPixel[1] = 255;
-                    bgrPixel[2] = 255;
+                    bgrPixel[2] = 0;
+                    
                     
                     //cout << 1.0 - (distance/maximumDetectableDistance) << endl;
                 }
@@ -189,7 +195,7 @@ void getCameraStreaming(){
     ifstream inputFile;
     string timeStamp;
     cout << "start file" << endl;
-    inputFile.open("20180724_14h10m15s_lidar_ts.txt");
+    inputFile.open("20180724_14h25m09s_lidar_ts.txt");
     
     
     bool isFirst = true;
@@ -198,11 +204,11 @@ void getCameraStreaming(){
         Mat cameraFrame;
         
         stream1.read(cameraFrame);
-        vector<int> dataPoints = findLidarDataRangeOnCamera(timeStamp);
+        //vector<int> dataPoints = findLidarDataRangeOnCameraString(timeStamp);
         
         //put lidar data on the image
-        processFrame(dataPoints, cameraFrame);
-        sleep(0.025);
+        //processFrame(dataPoints, cameraFrame);
+        //sleep(0.025);
         
         imshow("cam", cameraFrame);
         
@@ -219,10 +225,6 @@ void getCameraStreaming(){
     
     return;
 }
-
-
-
-
 
 //For data logging purpose. It returns a string
 //with current time to uniquely name log files
@@ -249,7 +251,6 @@ int millis(timeval t_start)
     return (t.tv_sec - t_start.tv_sec)*1000 + (t.tv_usec - t_start.tv_usec)/1000;
 }
 ///////
-
 
 
 void getLidarData(){
@@ -328,16 +329,65 @@ void getLidarData(){
 }
 
 
-
+void lidarAndCameraFuse(){
+    //initialized lidar data pump
+    std::vector<long> lidar_distance (1080);
+    std::vector<unsigned short> lidar_intensity(1080);
+    pthread_t lidar_thread;
+    lidarRead::thdata lidar_data;
+    lidar_data.b_loop = 0;
+    lidar_data.ip_or_portname = "192.168.1.50";
+    lidar_data.connection_type = "-e";
+    
+    //MISC
+    int loop = 1;
+    std::string timestamp;
+    struct timeval t_start;
+    
+    
+    pthread_create (&lidar_thread, NULL, &lidarRead::lidarReading, &lidar_data);
+    while (!lidar_data.b_loop);
+    
+    gettimeofday(&t_start,NULL);
+    
+    
+    
+    
+    // initializing camera
+    VideoCapture stream1(1);
+    if(!stream1.isOpened()){
+        cout << "no camera"<<endl;
+        return;
+    }
+    
+    
+    while(true){
+        cout << "there is camera" <<endl;
+        Mat cameraFrame;
+        
+        stream1.read(cameraFrame);
+        lidar_data.mtx.lock();
+        vector<int> vecint(lidar_data.distance.begin(),lidar_data.distance.end()); //it's ok to change long to int since the maximum distance is inside int
+        vector<int> dataPoints = vecint;
+        lidar_data.mtx.unlock();
+        
+        
+        //put lidar data on the image
+        processFrame(findLidarDataRangeOnLiveCamera(dataPoints), cameraFrame);
+        //sleep(0.025);
+        
+        imshow("cam", cameraFrame);
+        
+        if (waitKey(10) >= 0)
+            break;
+        
+    }
+}
 
 
 int main(int argc, const char * argv[]) {
     // insert code here...
-
-    //getLidarData();
-    getCameraStreaming();
-    
-    
+    lidarAndCameraFuse();
     return 0;
 }
 

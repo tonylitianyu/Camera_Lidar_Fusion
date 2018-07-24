@@ -18,12 +18,13 @@
 #include "lidarRead.h"
 #include <sys/time.h>
 #include <thread>
+#include <pthread.h>
 using namespace std;
 using namespace cv;
 
 
-const double cAngle = 160.0;
-const double cPixel = 1080.0;
+const double cAngle = 150.0;
+const double cPixel = 1920.0;
 const double lAngle = 270.0;
 
 vector<int> stringToArray(string text){
@@ -52,7 +53,7 @@ vector<int> findLidarDataRangeOnCamera(string points){
     vector<int> distancePoints = stringToArray(points);  //input point data vector;
     int numberOfPoint = 1080;
     for(int i = 0; i < numberOfPoint; i++){
-        //cout << distancePoints[i] << endl; //print data for each of 1080 point;
+        //cout << i<< "th " << distancePoints[i] << endl; //print data for each of 1080 point;
     }
 
     
@@ -68,6 +69,8 @@ vector<int> findLidarDataRangeOnCamera(string points){
     //decide which Lidar data point will be on the camera, filter out the data.
     for (int i = int(removePoints) + 1; i < (numberOfPoint - int(removePoints)); i++) {
         CLFusionPoint.push_back(distancePoints[i]);
+        //cout << i<< "th " << distancePoints[i] << endl; //print data for each in range point.
+        
     }
     
     return CLFusionPoint;
@@ -133,23 +136,39 @@ void processFrame(vector<int> data, Mat &frame){
     }
     
     //we need to have the height of the lidar view in camera. we will assume a number now.
-    int y = 500;
+    int y = 300;
     
-    double maximumDetectableDistance = 10000;
+    double maximumDetectableDistance = 300;
+    
+    double pointsPerDegree = 1080/lAngle;
+    
     double pixelPerDegree = cPixel/cAngle;
-    double pointPerPixel = (1080/lAngle)/pixelPerDegree;
-    cout << "point per pixel: " << pointPerPixel << endl;
     
+    double pixelPerPoint = pixelPerDegree/pointsPerDegree;
+    
+    
+    int pointCounter = 0;
     for(int i = y-20; i < y+20; i++){
-        for(int j = 0; j < image.cols; j++){
-            double distance = double(data[data.size() - 1 - j]);
-            
-            Vec3b &bgrPixel = image.at<Vec3b>(i, j);
-            if(distance < maximumDetectableDistance){
+        for(int j = 0; j < image.cols;){
+            long currIdx = data.size() - 1 - pointCounter;
+            if(currIdx >= 0){
+                double distance = double(data[data.size() - 1 - pointCounter]);
                 
-                bgrPixel[2] = 1.0 - (distance/maximumDetectableDistance);
-                cout << 1.0 - (distance/maximumDetectableDistance) << endl;
+                cout << currIdx << endl;
+                
+                Vec3b &bgrPixel = image.at<Vec3b>(i, j);
+                if(distance < maximumDetectableDistance){
+                    
+                    bgrPixel[0] = 255;// * (distance/maximumDetectableDistance);
+                    bgrPixel[1] = 255;
+                    bgrPixel[2] = 255;
+                    
+                    //cout << 1.0 - (distance/maximumDetectableDistance) << endl;
+                }
+                
+                pointCounter++;
             }
+            j += 3;
         }
     }
 
@@ -170,10 +189,10 @@ void getCameraStreaming(){
     ifstream inputFile;
     string timeStamp;
     cout << "start file" << endl;
-    inputFile.open("lidar_log");
+    inputFile.open("20180724_14h10m15s_lidar_ts.txt");
     
     
-    
+    bool isFirst = true;
     while(true && inputFile >> timeStamp){
         cout << "there is camera" <<endl;
         Mat cameraFrame;
@@ -187,8 +206,15 @@ void getCameraStreaming(){
         
         imshow("cam", cameraFrame);
         
+        if(isFirst){
+            imwrite("/Users/tianyuli/Downloads/firstFrame.png", cameraFrame);
+            isFirst = false;
+        }
+        
         if (waitKey(10) >= 0)
             break;
+        
+        isFirst = false;
     }
     
     return;
@@ -308,12 +334,8 @@ void getLidarData(){
 int main(int argc, const char * argv[]) {
     // insert code here...
 
-    
-    //lidar(getLidarData);
-
+    //getLidarData();
     getCameraStreaming();
-    
-    
     
     
     return 0;
